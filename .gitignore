@@ -1,3 +1,18 @@
+*.png 
+*.jpg 
+*.jpeg 
+*.gif 
+*.bmp 
+*.tiff 
+*.ico 
+*.webp 
+*.pkl 
+*.pt 
+*.pth 
+*checkpoints/
+*.ipynb 
+Miniconda3.sh
+*.vscode/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
