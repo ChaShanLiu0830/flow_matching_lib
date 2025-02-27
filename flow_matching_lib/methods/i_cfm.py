@@ -3,27 +3,32 @@ import torch.nn as nn
 from beartype import beartype
 from beartype.typing import Optional
 from torch import Tensor
-from .base import BaseCFM
+from ..methods.base_cfm import BaseCFM
 
 class I_CFM(BaseCFM):
     """Independent Conditional Flow Matching implementation.
     
-    This class implements the Independent Flow Matching method where the vector field
-    is computed independently at each time step without considering the path constraints.
+    I-CFM is the simplest form of conditional flow matching where:
+    1. The vector field is computed as v(x,t) = x1 - x0 (straight path)
+    2. Intermediate states are linear interpolations with added noise
+    3. The loss is a simple MSE between predicted and target vector fields
+    
+    This method is computationally efficient but may not capture complex trajectories.
     """
     
     @beartype
-    def __init__(self, nn_model: nn.Module):
-        """Initialize the Independent Flow Matching model.
+    def __init__(self, sigma: float = 1):
+        """Initialize the I-CFM method.
 
         Args:
-            nn_model (nn.Module): Neural network model to compute the base vector field.
-                                Should take (x0, x1, t, z) as input and output a vector field.
+            sigma (float): Noise level for stochastic trajectories.
+                         Controls the variance of Gaussian noise added to interpolated states.
+                         Defaults to 1.
         """
-        super(I_CFM, self).__init__(nn_model)
+        super().__init__(sigma)
     
     @beartype
-    def compute_vector_field(self, v: Tensor, x0: Tensor, x1: Tensor, t: Tensor, z: Optional[Tensor] = None) -> Tensor:
+    def compute_vector_field(self, x0: Tensor, x1: Tensor, t: Tensor, z: Optional[Tensor] = None) -> Tensor:
         """Compute the vector field using Independent Flow Matching.
 
         Args:
@@ -52,7 +57,7 @@ class I_CFM(BaseCFM):
             Tensor: Mean squared error between predicted and target vector fields.
         """
         # Simple MSE loss between predicted and target vector fields
-        return torch.mean((v_nn - u_t) ** 2)
+        return torch.mean((u_t - v_nn) ** 2)
     
     @beartype
     def compute_xt(self, x0: Tensor, x1: Tensor, t: Tensor, z: Optional[Tensor] = None) -> Tensor:
@@ -69,5 +74,6 @@ class I_CFM(BaseCFM):
         """
         # Linear interpolation between x0 and x1
         x_t = (1 - t) * x0 + t * x1
-        return x_t
+        return x_t + self.sigma * torch.randn_like(x_t)
+
     

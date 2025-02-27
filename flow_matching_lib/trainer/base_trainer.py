@@ -2,12 +2,13 @@ import os
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, Union
 from beartype import beartype
 from torch import Tensor
 from tqdm import tqdm
-from ..methods.base import BaseCFM
+from ..methods.base_cfm import BaseCFM
 from torch.nn.utils import clip_grad_norm_
+import matplotlib.pyplot as plt
 
 class BaseTrainer:
     """Base trainer class for Conditional Flow Matching models."""
@@ -102,7 +103,7 @@ class BaseTrainer:
         return loss.item()
 
     @beartype
-    def train(self, num_epochs: int, save_frequency: int = 1) -> Dict[str, list]:
+    def train(self, num_epochs: int, save_frequency: int = 1) -> None:
         """Train the model.
 
         Args:
@@ -146,10 +147,10 @@ class BaseTrainer:
                 self.history['valid_loss'].append(valid_loss)
 
             # Update progress bar description
-            desc = f"Epoch {epoch+1}/{num_epochs} - Train Loss: {train_loss:.6f}"
+            desc = {f"Epoch": f"{epoch+1}/{num_epochs}", "Train Loss": f"{train_loss:.6f}"}
             if valid_loss is not None:
-                desc += f" - Valid Loss: {valid_loss:.6f}"
-            pbar.set_description(desc)
+                desc["Valid Loss"] = f"{valid_loss:.6f}"
+            pbar.set_postfix(desc)
 
             # Save checkpoint if needed
             if (epoch + 1) % save_frequency == 0:
@@ -157,16 +158,86 @@ class BaseTrainer:
 
             self.history['current_epoch'] = epoch + 1
 
-        return self.history
+    @beartype
+    def plot_losses(
+        self,
+        last_n_epochs: Optional[int] = None,
+        figsize: Tuple[int, int] = (10, 6),
+        save_path: Optional[str] = None,
+        show: bool = True,
+    ) -> None:
+        """Plot training and validation losses.
+
+        Args:
+            last_n_epochs (Optional[int], optional): Number of last epochs to plot. 
+                If None, plots all epochs. Defaults to None.
+            figsize (Tuple[int, int], optional): Figure size (width, height). Defaults to (10, 6).
+            save_path (Optional[str], optional): Path to save the plot. 
+                If None, plot is not saved. Defaults to None.
+            show (bool, optional): Whether to display the plot. Defaults to True.
+        """
+        train_losses = self.history['train_loss']
+        valid_losses = self.history['valid_loss']
+        
+        # Determine the range of epochs to plot
+        total_epochs = len(train_losses)
+        if last_n_epochs is not None:
+            start_epoch = max(0, total_epochs - last_n_epochs)
+        else:
+            start_epoch = 0
+            
+        epochs = range(1, total_epochs + 1)
+        plot_epochs = epochs[start_epoch:]
+        plot_train_losses = train_losses[start_epoch:]
+        
+        plt.figure(figsize=figsize)
+        plt.plot(plot_epochs, plot_train_losses, label='Training Loss', color='blue')
+        
+        if valid_losses:  # Plot validation losses if they exist
+            plot_valid_losses = valid_losses[start_epoch:]
+            plt.plot(plot_epochs, plot_valid_losses, label='Validation Loss', color='red')
+        
+        plt.title('Training and Validation Losses')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.legend()
+        
+        # Add best validation loss as text if it exists
+        if self.history['best_valid_loss'] != float('inf'):
+            plt.text(
+                0.02, 0.98, 
+                f'Best Val Loss: {self.history["best_valid_loss"]:.6f}',
+                transform=plt.gca().transAxes,
+                verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8)
+            )
+        
+        if save_path is not None:
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            plt.savefig(save_path, bbox_inches='tight', dpi=300)
+        
+        if show:
+            plt.show()
+        else:
+            plt.close()
 
     @beartype
-    def save_checkpoint(self, epoch: int, train_loss: float, valid_loss: Optional[float] = None) -> None:
+    def save_checkpoint(
+        self, 
+        epoch: int, 
+        train_loss: float, 
+        valid_loss: Optional[float] = None,
+        save_plot: bool = True
+    ) -> None:
         """Save a checkpoint.
 
         Args:
             epoch (int): Current epoch number.
             train_loss (float): Current training loss.
             valid_loss (Optional[float], optional): Current validation loss. Defaults to None.
+            save_plot (bool, optional): Whether to save loss plot with checkpoint. Defaults to True.
         """
         checkpoint = {
             'epoch': epoch,
@@ -203,9 +274,17 @@ class BaseTrainer:
             # Also save with the best validation loss value in the filename
             best_loss_path = os.path.join(
                 self.model_checkpoint_dir, 
-                f'{self.model_name}_best_{valid_loss:.6f}.pt'
+                f'{self.model_name}_best.pt'
             )
             torch.save(checkpoint, best_loss_path)
+
+        # Save loss plot if requested
+        if save_plot:
+            plot_path = os.path.join(
+                self.model_checkpoint_dir,
+                f'{self.model_name}_losses.png'
+            )
+            self.plot_losses(save_path=plot_path, show=False)
 
     @beartype
     def load_checkpoint(self, checkpoint_path: Optional[str] = None, load_best: bool = False) -> Dict[str, Any]:

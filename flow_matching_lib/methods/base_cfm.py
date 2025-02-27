@@ -2,23 +2,30 @@ import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
 from beartype import beartype
-from beartype.typing import Optional, Union
+from beartype.typing import Optional, Union, Tuple
 from torch import Tensor
 
-class BaseCFM(nn.Module, ABC):
+class BaseCFM(ABC):
+    """Base class for Conditional Flow Matching (CFM) methods.
+    
+    CFM is a framework for learning continuous normalizing flows by matching vector fields
+    between pairs of samples. This base class provides the interface for different CFM methods.
+    
+    The flow is defined by an ODE: dx/dt = v(x,t), where v is the vector field.
+    Different CFM methods specify different ways to compute this vector field.
+    """
+    
     @beartype
-    def __init__(self, nn_model: nn.Module):
-        """Initialize the base Conditional Flow Matching model.
+    def __init__(self, sigma: float = 1):
+        """Initialize the base CFM method.
 
         Args:
-            nn_model (nn.Module): Neural network model to compute the base vector field.
-                                Should take (x0, x1, t, z) as input and output a vector field.
-
-        Note:
-            The neural network should handle the concatenation of inputs internally.
+            sigma (float): Noise level for stochastic trajectories.
+                         Higher values lead to more exploration but less precise paths.
+                         Defaults to 1.
         """
-        super(BaseCFM, self).__init__()
-        self.nn_model = nn_model
+        super().__init__()
+        self.sigma = sigma
 
     @abstractmethod
     @beartype
@@ -65,23 +72,9 @@ class BaseCFM(nn.Module, ABC):
         """
         pass
     
-    @beartype
-    def compute_probability(self, x0: Tensor, x1: Tensor, t: Tensor, z: Optional[Tensor] = None) -> Tensor:
-        """Compute transition probability between states.
-
-        Args:
-            x0 (Tensor): Initial state of shape (batch_size, data_dim).
-            x1 (Tensor): Target state of shape (batch_size, data_dim).
-            t (Tensor): Time points of shape (batch_size, 1).
-            z (Optional[Tensor], optional): Conditional latent code. Defaults to None.
-
-        Returns:
-            Tensor: Transition probabilities of shape (batch_size, 1).
-        """
-        pass
     
-    @beartype
-    def batch_transform(self, x0: Tensor, x1: Tensor, t: Tensor, z: Optional[Tensor] = None) -> Tensor:
+    # @beartype
+    def batch_transform(self, x0: Tensor, x1: Tensor, t: Tensor, z: Optional[Tensor] = None) -> Tuple[Tensor, Tensor, Tensor, Optional[Tensor]]:
         """Transform batch of samples using the flow matching process.
 
         Args:
