@@ -24,7 +24,7 @@ class BaseTrainer:
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         checkpoint_dir: str = "checkpoints",
         model_name: str = "model",
-        max_grad_norm: float = 1,
+        max_grad_norm: float = 1.0,
     ):
         """Initialize the base trainer.
 

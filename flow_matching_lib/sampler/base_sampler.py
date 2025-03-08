@@ -5,6 +5,7 @@ from typing import Optional, Tuple, Callable
 from beartype import beartype
 from torch import Tensor
 from ..methods.base_cfm import BaseCFM
+from tqdm import tqdm
 
 class BaseSampler:
     """Base class for sampling from Conditional Flow Matching models.
@@ -102,59 +103,7 @@ class BaseSampler:
         # Permute to (batch_size, n_points, data_dim)
         # trajectory = trajectory.permute(1, 0, 2)
         
-        return t_eval, trajectory
-    
-    @beartype
-    def sample_points(
-        self,
-        x: Tensor,
-        num_samples: int = 1,
-        start_t: float = 0.0,
-        end_t: float = 1.0,
-        z: Optional[Tensor] = None,
-    ) -> Tensor:
-        """Sample multiple points at random times for each input point.
-
-        Args:
-            x (Tensor): Starting points of shape (batch_size, data_dim).
-            num_samples (int, optional): Number of samples per input point. Defaults to 1.
-            start_t (float, optional): Start time. Defaults to 0.0.
-            end_t (float, optional): End time. Defaults to 1.0.
-            z (Optional[Tensor], optional): Conditional code. Defaults to None.
-
-        Returns:
-            Tensor: Sampled points of shape (batch_size, num_samples, data_dim).
-        """
-        self.model.eval()
-        
-        # Repeat inputs for multiple samples
-        x_repeat = x.repeat_interleave(num_samples, dim=0)
-        z_repeat = z.repeat_interleave(num_samples, dim=0) if z is not None else None
-        
-        # Generate random time points
-        t_samples = torch.rand(len(x_repeat), device=self.device) * (end_t - start_t) + start_t
-        
-        def ode_func(t: Tensor, x: Tensor) -> Tensor:
-            return self.vector_field_fn(t, x, z_repeat)
-        
-        samples = []
-        for i in range(len(x_repeat)):
-            t_i = torch.tensor([start_t, t_samples[i]], device=self.device)
-            traj = odeint(
-                ode_func,
-                x_repeat[i:i+1],
-                t_i,
-                rtol=self.rtol,
-                atol=self.atol,
-                method=self.method,
-            )
-            samples.append(traj[-1])
-            
-        samples = torch.cat(samples, dim=0)
-        # Reshape to (batch_size, num_samples, data_dim)
-        samples = samples.reshape(x.shape[0], num_samples, -1)
-        
-        return samples
+        return trajectory[-1, ...], trajectory
     
     @beartype
     def sample_batch(
@@ -163,8 +112,8 @@ class BaseSampler:
         num_samples: int = 1,
         start_t: float = 0.0,
         end_t: float = 1.0,
-        show_progress: bool = True,
-    ) -> Tuple[Tensor, Tensor, Optional[Tensor]]:
+        n_points: int = 100,
+    ) -> Tensor:
         """Sample points for a batch of data.
 
         Args:
@@ -181,28 +130,32 @@ class BaseSampler:
                 - z (Optional[Tensor]): Conditional codes if provided
         """
         self.model.eval()
-        all_x, all_samples, all_z = [], [], []
         
-        if show_progress:
-            from tqdm import tqdm
-            dataloader = tqdm(dataloader, desc="Sampling batches")
+        all_gen_samples = []
+        
+        # dataloader = 
             
         with torch.no_grad():
-            for batch in dataloader:
-                x = batch['x'].to(self.device)
-                z = batch.get('z')
-                if z is not None:
-                    z = z.to(self.device)
+            for _ in tqdm(range(num_samples), desc="Sampling numbers", leave=False):
+                gen_samples = []
+                for batch in tqdm(dataloader, desc="Sampling batches", leave=False):
+                    x = batch['x0'].to(self.device)
+                    z = batch.get('z')
+                    if z is not None:
+                        z = z.to(self.device)
                 
-                samples = self.sample_points(x, num_samples, start_t, end_t, z)
-                
-                all_x.append(x)
-                all_samples.append(samples)
-                if z is not None:
-                    all_z.append(z)
+                    samples, _ = self.sample_trajectory(x, start_t, end_t, n_points, z)
+                    
+                    # all_x.append(x)
+                    gen_samples.append(samples)
+                gen_samples = torch.cat(gen_samples, dim=0).unsqueeze(-1)
+                all_gen_samples.append(gen_samples)
+            all_gen_samples = torch.cat(all_gen_samples, dim=-1)
+                # if z is not None:
+                #     all_z.append(z)
         
-        x = torch.cat(all_x, dim=0)
-        samples = torch.cat(all_samples, dim=0)
-        z = torch.cat(all_z, dim=0) if all_z else None
+        # x = torch.cat(all_x, dim=0)
         
-        return x, samples, z 
+        # z = torch.cat(all_z, dim=0) if all_z else None
+        
+        return all_gen_samples
