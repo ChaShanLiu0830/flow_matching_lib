@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from beartype import beartype
-from beartype.typing import Optional
+from beartype.typing import Optional, Any, Dict, Tuple, List
 from torch import Tensor
 from ..methods.base_cfm import BaseCFM
 
@@ -17,7 +17,7 @@ class I_CFM(BaseCFM):
     """
     
     @beartype
-    def __init__(self, sigma: float = 1):
+    def __init__(self, sigma: float = 1, **kwargs):
         """Initialize the I-CFM method.
 
         Args:
@@ -25,7 +25,7 @@ class I_CFM(BaseCFM):
                          Controls the variance of Gaussian noise added to interpolated states.
                          Defaults to 1.
         """
-        super().__init__(sigma)
+        super().__init__(sigma, **kwargs)
     
     @beartype
     def compute_vector_field(self, x0: Tensor, x1: Tensor, t: Tensor, z: Optional[Tensor] = None) -> Tensor:
@@ -75,5 +75,8 @@ class I_CFM(BaseCFM):
         # Linear interpolation between x0 and x1
         x_t = (1 - t) * x0 + t * x1
         return x_t + self.sigma * torch.randn_like(x_t)
+    
+    def batch_transform(self, *args) -> Any:
+        return args
 
     

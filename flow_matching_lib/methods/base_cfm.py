@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
 from beartype import beartype
-from beartype.typing import Optional, Union, Tuple
+from beartype.typing import Optional, Union, Tuple, Any, List, Dict
 from torch import Tensor
 
 class BaseCFM(ABC):
@@ -16,7 +16,7 @@ class BaseCFM(ABC):
     """
     
     @beartype
-    def __init__(self, sigma: float = 1):
+    def __init__(self, sigma: float = 1.0, **kwargs):
         """Initialize the base CFM method.
 
         Args:
@@ -73,17 +73,5 @@ class BaseCFM(ABC):
         pass
     
     
-    # @beartype
-    def batch_transform(self, x0: Tensor, x1: Tensor, t: Tensor, z: Optional[Tensor] = None) -> Tuple[Tensor, Tensor, Tensor, Optional[Tensor]]:
-        """Transform batch of samples using the flow matching process.
-
-        Args:
-            x0 (Tensor): Initial state of shape (batch_size, data_dim).
-            x1 (Tensor): Target state of shape (batch_size, data_dim).
-            t (Tensor): Time points of shape (batch_size, 1).
-            z (Optional[Tensor], optional): Conditional latent code. Defaults to None.
-
-        Returns:
-            Tensor: Transformed inputs. 
-        """
-        return x0, x1, t, z 
+    def batch_transform(self, *args) -> Any:
+        pass
