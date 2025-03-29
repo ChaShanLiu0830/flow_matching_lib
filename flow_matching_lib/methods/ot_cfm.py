@@ -38,14 +38,13 @@ class OT_CFM(I_CFM):
             normalize=normalize
         )
     
-    @beartype
     def batch_transform(
         self, 
         x0: Tensor, 
         x1: Tensor, 
         t: Tensor, 
         *args
-    ) -> Tuple[Tensor, Tensor, Tensor, Optional[Tensor]]:
+    ):
         """Transform batch of samples using the OT matching process.
 
         Args:

@@ -73,22 +73,24 @@ class BaseTrainer:
         """
         # Process batch data
         x0, x1 = batch['x0'].to(self.device), batch['x1'].to(self.device)
-        z = batch.get('z')
-        if z is not None:
-            z = z.to(self.device)
+        z0, z1 = batch.get('z0'), batch.get('z1')
+        if z0 is not None:
+            z0 = z0.to(self.device)
+        if z1 is not None:
+            z1 = z1.to(self.device)
 
         batch_size = x0.size(0)
         t = torch.rand(batch_size, 1, device=self.device)
 
         # Apply batch transform
-        x0, x1, t, z = self.cfm.batch_transform(x0, x1, t, z)
+        x0, x1, t, z0, z1 = self.cfm.batch_transform(x0, x1, t, z0, z1)
         
-        xt = self.cfm.compute_xt(x0, x1, t, z)
+        xt = self.cfm.compute_xt(x0, x1, t)
         # Compute target vector field
-        v_target = self.cfm.compute_vector_field(x0, x1, t, z)
+        v_target = self.cfm.compute_vector_field(x0, x1, t)
         
         # Forward pass through the neural network
-        v_pred = self.model(xt, t, z) if z is not None else self.model(xt, t)
+        v_pred = self.model(xt, t, z0, z1)
 
         # Compute loss using CFM method
         loss = self.cfm.loss_fn(v_pred, v_target)

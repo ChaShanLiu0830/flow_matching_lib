@@ -31,32 +31,34 @@ class GuiderTrainer(BaseTrainer):
         """
         # Process batch data
         x0, x1 = batch['x0'].to(self.device), batch['x1'].to(self.device)
-        z = batch.get('z')
-        if z is not None:
-            z = z.to(self.device)
+        z0, z1 = batch.get('z0'), batch.get('z1')
+        if z0 is not None:
+            z0 = z0.to(self.device)
+        if z1 is not None:
+            z1 = z1.to(self.device)
 
         batch_size = x0.size(0)
         t = torch.rand(batch_size, 1, device=self.device)
 
         # Apply batch transform
-        x0, x1, t, z = self.cfm.batch_transform(x0, x1, t, z)
+        x0, x1, t, z0, z1 = self.cfm.batch_transform(x0, x1, t, z0, z1)
         
         # Compute intermediate state
-        xt = self.cfm.compute_xt(x0, x1, t, z)
+        xt = self.cfm.compute_xt(x0, x1, t)
         
         # Compute target vector field
-        v_target = self.cfm.compute_vector_field(x0, x1, t, z)
+        v_target = self.cfm.compute_vector_field(x0, x1, t)
 
         if is_training:
             self.optimizer.zero_grad()
             total_loss = 0.0
             
-            v_pred_cond = self.model(xt, t, z, is_conditional=True)
+            v_pred_cond = self.model(xt, t, z0, z1, is_conditional=True)
             loss_cond = self.cfm.loss_fn(
                 v_pred_cond, 
                 v_target
             )
-            v_pred_uncond = self.model(xt, t, z, is_conditional=False)
+            v_pred_uncond = self.model(xt, t, z0, z1, is_conditional=False)
             loss_uncond = self.cfm.loss_fn(
                 v_pred_uncond, 
                 v_target
@@ -72,9 +74,9 @@ class GuiderTrainer(BaseTrainer):
         
         else:
             # During validation, only use conditional path
-            v_pred_cond = self.model(xt, t, z, is_conditional=True)
+            v_pred_cond = self.model(xt, t, z0, z1, is_conditional=True)
             loss_cond = self.cfm.loss_fn(v_pred_cond, v_target)
-            v_pred_uncond = self.model(xt, t, z, is_conditional=False)
+            v_pred_uncond = self.model(xt, t, z0, z1, is_conditional=False)
             loss_uncond = self.cfm.loss_fn(v_pred_uncond, v_target)
             total_loss = loss_cond + loss_uncond
             return total_loss.item()

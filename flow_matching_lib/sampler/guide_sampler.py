@@ -40,13 +40,14 @@ class GuiderSampler(BaseSampler):
         super().__init__(cfm, model, device, rtol, atol, method)
         self.guidance_weight = guidance_weight
     
-    def vector_field_fn(self, t: Tensor, x: Tensor, z: Optional[Tensor] = None) -> Tensor:
+    def vector_field_fn(self, t: Tensor, x: Tensor, z0: Optional[Tensor] = None, z1: Optional[Tensor] = None) -> Tensor:
         """Compute the guided vector field at a given time and state.
 
         Args:
             t (Tensor): Current time point.
             x (Tensor): Current state.
-            z (Optional[Tensor], optional): Conditional code. Defaults to None.
+            z0 (Optional[Tensor], optional): Conditional code. Defaults to None.
+            z1 (Optional[Tensor], optional): Conditional code. Defaults to None.
 
         Returns:
             Tensor: Guided vector field at (x,t).
@@ -55,41 +56,15 @@ class GuiderSampler(BaseSampler):
         
         with torch.no_grad():
             # Get conditional prediction
-            v_cond = self.model(x, t, z)
+            v_cond = self.model(x, t, z0, z1)
             
             # Get unconditional prediction (zero out condition)
-            v_uncond = self.model(x, t, torch.zeros_like(z))
+            v_uncond = self.model(x, t, z0, z1, is_conditional=False)
             
             # Combine predictions using guidance weight
             v = v_uncond + self.guidance_weight * (v_cond - v_uncond)
             
         return v
-    
-    @beartype
-    def sample_trajectory(
-        self, 
-        x: Tensor,
-        start_t: float = 0.0,
-        end_t: float = 1.0,
-        n_points: int = 100,
-        z: Optional[Tensor] = None,
-    ) -> Tuple[Tensor, Tensor]:
-        """Sample a continuous trajectory starting from given points.
-
-        Args:
-            x (Tensor): Starting points of shape (batch_size, data_dim).
-            start_t (float, optional): Start time. Defaults to 0.0.
-            end_t (float, optional): End time. Defaults to 1.0.
-            n_points (int, optional): Number of points to sample along trajectory. Defaults to 100.
-            z (Optional[Tensor], optional): Conditional code. Defaults to None.
-
-        Returns:
-            Tuple[Tensor, Tensor]: Tuple containing:
-                - final_points (Tensor): Final sampled points
-                - trajectory (Tensor): Full trajectory
-        """
-        return super().sample_trajectory(x, start_t, end_t, n_points, z)
-    
     @beartype
     def sample_batch(
         self,

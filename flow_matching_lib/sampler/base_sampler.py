@@ -45,7 +45,7 @@ class BaseSampler:
         self.atol = atol
         self.method = method
         
-    def vector_field_fn(self, t: Tensor, x: Tensor, z: Optional[Tensor] = None) -> Tensor:
+    def vector_field_fn(self, t: Tensor, x: Tensor, z0: Optional[Tensor] = None, z1: Optional[Tensor]= None) -> Tensor:
         """Compute the vector field at a given time and state.
 
         Args:
@@ -58,7 +58,7 @@ class BaseSampler:
         """
         t = t.reshape(1, 1).expand(x.shape[0], 1)
         with torch.no_grad():
-            v = self.model(x, t, z) if z is not None else self.model(x, t)
+            v = self.model(x, t, z0, z1) if z0 is not None else self.model(x, t)
         return v
     
     @beartype
@@ -68,7 +68,8 @@ class BaseSampler:
         start_t: float = 0.0,
         end_t: float = 1.0,
         n_points: int = 100,
-        z: Optional[Tensor] = None,
+        z0: Optional[Tensor] = None,
+        z1: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Tensor]:
         """Sample a continuous trajectory starting from given points.
 
@@ -77,7 +78,8 @@ class BaseSampler:
             start_t (float, optional): Start time. Defaults to 0.0.
             end_t (float, optional): End time. Defaults to 1.0.
             n_points (int, optional): Number of points to sample along trajectory. Defaults to 100.
-            z (Optional[Tensor], optional): Conditional code. Defaults to None.
+            z0 (Optional[Tensor], optional): Conditional code for source. Defaults to None.
+            z1 (Optional[Tensor], optional): Conditional code for target. Defaults to None.
 
         Returns:
             Tuple[Tensor, Tensor]: Tuple containing:
@@ -88,7 +90,7 @@ class BaseSampler:
         t_eval = torch.linspace(start_t, end_t, n_points, device=self.device)
         
         def ode_func(t: Tensor, x: Tensor) -> Tensor:
-            return self.vector_field_fn(t, x, z)
+            return self.vector_field_fn(t, x, z0, z1)
         
         # Solve ODE - output shape is (n_points, batch_size, data_dim)
         trajectory = odeint(
@@ -140,11 +142,14 @@ class BaseSampler:
                 gen_samples = []
                 for batch in tqdm(dataloader, desc="Sampling batches", leave=False):
                     x = batch['x0'].to(self.device)
-                    z = batch.get('z')
-                    if z is not None:
-                        z = z.to(self.device)
+                    z0 = batch.get('z0')
+                    z1 = batch.get('z1')
+                    if z0 is not None:
+                        z0 = z0.to(self.device)
+                    if z1 is not None:
+                        z1 = z1.to(self.device)
                 
-                    samples, _ = self.sample_trajectory(x, start_t, end_t, n_points, z)
+                    samples, _ = self.sample_trajectory(x, start_t, end_t, n_points, z0, z1)
                     
                     # all_x.append(x)
                     gen_samples.append(samples)
