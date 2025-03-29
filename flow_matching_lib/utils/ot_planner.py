@@ -143,6 +143,7 @@ class OptimalTransportPlanner:
         target: Union[Tensor, np.ndarray],
         source_condition: Union[Tensor, np.ndarray],
         target_condition: Union[Tensor, np.ndarray],
+        condition_weight: float = 1.0,
         kernel_bandwidth: float = 1.0,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Compute conditional optimal transport plan using kernel distances on conditions.
@@ -184,21 +185,26 @@ class OptimalTransportPlanner:
             source_cond_np = self._normalize_distribution(source_cond_np)
             target_cond_np = self._normalize_distribution(target_cond_np)
         
+        source_concat = np.concatenate([source_np*(1-condition_weight), source_cond_np*condition_weight], axis=-1)
+        target_concat = np.concatenate([target_np*(1-condition_weight), target_cond_np*condition_weight], axis=-1)
+        
         # Get distribution weights
-        source_weights = self._get_distribution_weights(source_np)
-        target_weights = self._get_distribution_weights(target_np)
+        source_weights = self._get_distribution_weights(source_concat)
+        target_weights = self._get_distribution_weights(target_concat)
+        
+        
         
         # Compute spatial cost matrix using POT
-        M_spatial = ot.dist(source_np, target_np, metric=self.metric)
+        M_spatial = ot.dist(source_concat, target_concat, metric=self.metric)
         
         # Compute condition cost matrix using kernel distance
-        M_condition = self._compute_kernel_distance(source_cond_np, target_cond_np, kernel_bandwidth)
+        # M_condition = self._compute_kernel_distance(source_concat, target_concat, kernel_bandwidth)
         
         # Combine spatial and condition costs
-        M_combined = M_spatial + M_condition
+        # M_combined = M_condition
         
         # Compute optimal transport plan using POT's Earth Mover's Distance (EMD)
-        transport_plan = ot.emd(source_weights, target_weights, M_combined)
+        transport_plan = ot.emd(source_weights, target_weights, M_spatial)
         
         return transport_plan, source_weights, target_weights
     
@@ -278,7 +284,6 @@ class OptimalTransportPlanner:
         
         return matched_source, matched_target
     
-    @beartype
     def get_conditional_matched_pairs(
         self,
         source: Union[Tensor, np.ndarray],
@@ -286,8 +291,9 @@ class OptimalTransportPlanner:
         source_condition: Union[Tensor, np.ndarray],
         target_condition: Union[Tensor, np.ndarray],
         kernel_bandwidth: float = 1.0,
+        condition_weight: float = 1.0,
         return_tensors: bool = True,
-    ) -> Union[Tuple[Tensor, Tensor], Tuple[np.ndarray, np.ndarray]]:
+    ):
         """Get matched pairs between source and target distributions based on conditions.
 
         Args:
@@ -311,7 +317,7 @@ class OptimalTransportPlanner:
         
         # Compute conditional transport plan
         transport_plan, _, _ = self.compute_conditional_transport_plan(
-            source_np, target_np, source_cond_np, target_cond_np, kernel_bandwidth
+            source_np, target_np, source_cond_np, target_cond_np, condition_weight, kernel_bandwidth
         )
         
         # Extract matched pairs from transport plan
@@ -320,12 +326,15 @@ class OptimalTransportPlanner:
         # Get matched pairs
         matched_source = source_np[row_ind]
         matched_target = target_np[col_ind]
+        matched_source_condition = source_cond_np[row_ind]
+        matched_target_condition = target_cond_np[col_ind]
         
         if return_tensors:
             matched_source = self._to_tensor(matched_source, self.device)
             matched_target = self._to_tensor(matched_target, self.device)
-        
-        return matched_source, matched_target
+            matched_source_condition = self._to_tensor(matched_source_condition, self.device)
+            matched_target_condition = self._to_tensor(matched_target_condition, self.device)
+        return matched_source, matched_target, matched_source_condition, matched_target_condition
 
 
 # Example usage

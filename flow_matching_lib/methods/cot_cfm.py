@@ -4,9 +4,10 @@ from beartype import beartype
 from beartype.typing import Optional, Tuple
 from torch import Tensor
 from ..methods.base_cfm import BaseCFM
+from ..methods.i_cfm import I_CFM
 from ..utils.ot_planner import OptimalTransportPlanner
 
-class COT_CFM(BaseCFM):
+class COT_CFM(I_CFM):
     """Conditional Optimal Transport Conditional Flow Matching implementation.
     
     COT-CFM extends OT-CFM by using conditional optimal transport to find correspondences
@@ -23,6 +24,7 @@ class COT_CFM(BaseCFM):
         metric: str = "euclidean",
         normalize: bool = True,
         kernel_bandwidth: float = 1.0,
+        conditional_weight: float = 0.5,
         **kwargs
     ):
         """Initialize the COT-CFM method.
@@ -32,6 +34,7 @@ class COT_CFM(BaseCFM):
             metric (str, optional): Distance metric for OT computation. Defaults to "euclidean".
             normalize (bool, optional): Whether to normalize distributions. Defaults to True.
             kernel_bandwidth (float, optional): Bandwidth for the kernel used in condition matching. Defaults to 1.0.
+            conditional_weight (float, optional): Weight for the conditional matching. 1.0 for no conditional pairing. 0.0 for all conditional pairing. Defaults to 0.5.
         """
         super().__init__(sigma, **kwargs)
         self.ot_planner = OptimalTransportPlanner(
@@ -39,6 +42,8 @@ class COT_CFM(BaseCFM):
             normalize=normalize
         )
         self.kernel_bandwidth = kernel_bandwidth
+        self.conditional_weight = conditional_weight
+        assert self.conditional_weight >= 0.0 and self.conditional_weight <= 1.0, "Conditional weight must be between 0 and 1"
 
     def batch_transform(
         self, 
@@ -62,7 +67,7 @@ class COT_CFM(BaseCFM):
         """
         # Use conditional OT matching with different conditions for source and target
         matched_x0, matched_x1, matched_z0, matched_z1 = self.ot_planner.get_conditional_matched_pairs(
-            x0, x1, z0, z1, self.kernel_bandwidth
+            x0, x1, z0, z1, self.kernel_bandwidth, self.conditional_weight
         )
         
         return matched_x0, matched_x1, t, matched_z0, matched_z1 
