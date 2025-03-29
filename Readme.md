@@ -16,7 +16,7 @@ Flow Matching Library provides a flexible framework for implementing and experim
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/flow_matching_lib.git
+git clone https://github.com/ChaShanLiu0830/flow_matching_lib.git
 cd flow_matching_lib
 pip install -e .
 ```
